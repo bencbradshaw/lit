@@ -1,42 +1,26 @@
-import {Plugin, SourceDescription, TransformHook, PluginContext} from 'rollup';
+import { SourceDescription, PluginContext} from 'rollup-4';
 import {createFilter} from 'rollup-pluginutils';
 import * as minify from './lib/minify-html-literals.js';
 
-/**
- * Plugin options.
- */
+/** Plugin options. */
 export interface Options {
-  /**
-   * Pattern or array of patterns of files to minify.
-   */
+  /** Pattern or array of patterns of files to minify. */
   include?: string | string[];
-  /**
-   * Pattern or array of patterns of files not to minify.
-   */
+  /** Pattern or array of patterns of files not to minify. */
   exclude?: string | string[];
-  /**
-   * Minify options, see
-   * https://www.npmjs.com/package/minify-html-literals#options.
-   */
+  /** Minify options, see https://www.npmjs.com/package/minify-html-literals#options. */
   options?: Partial<minify.Options>;
-  /**
-   * If true, any errors while parsing or minifying will abort the bundle
-   * process. Defaults to false, which will only show a warning.
-   */
+  /** If true, any errors while parsing or minifying will abort the bundle process. Defaults to false, which will only show a warning. */
   failOnError?: boolean;
-  /**
-   * Override minify-html-literals function.
-   */
+  /** Override minify-html-literals function.*/
   minifyHTMLLiterals?: typeof minify.minifyHTMLLiterals;
-  /**
-   * Override include/exclude filter.
-   */
+  /** Override include/exclude filter. */
   filter?: (id: string) => boolean;
 }
 
 export default function (
   options: Options = {}
-): Plugin & {transform: TransformHook} {
+){
   if (!options.minifyHTMLLiterals) {
     options.minifyHTMLLiterals = minify.minifyHTMLLiterals;
   }

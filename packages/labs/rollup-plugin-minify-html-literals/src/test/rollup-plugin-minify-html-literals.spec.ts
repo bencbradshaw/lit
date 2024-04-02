@@ -1,10 +1,8 @@
 import {expect} from 'chai';
 import * as path from 'path';
-import {TransformPluginContext as TransformPluginContext3} from 'rollup';
-// import {TransformPluginContext as TransformPluginContext4} from 'rollup-4';
 import sinon from 'sinon';
 import * as minify from '../lib/minify-html-literals.js';
-import minifyHTML, {Options} from '../index.js';
+import minifyHTML, {type Options} from '../index.js';
 
 describe('rollup-plugin-minify-html-literals', () => {
   const fileName = path.resolve('test.js');
@@ -28,7 +26,7 @@ describe('rollup-plugin-minify-html-literals', () => {
     const plugin = minifyHTML(options);
     expect(options.minifyHTMLLiterals).to.be.a('function');
     const minifySpy = sinon.spy(options, 'minifyHTMLLiterals');
-    plugin.transform.apply(context as unknown as TransformPluginContext3, [
+    plugin.transform.apply(context as any , [
       'return',
       fileName,
     ]);
@@ -46,7 +44,7 @@ describe('rollup-plugin-minify-html-literals', () => {
 
     const plugin = minifyHTML(options);
     const minifySpy = sinon.spy(options, 'minifyHTMLLiterals');
-    plugin.transform.apply(context as unknown as TransformPluginContext3, [
+    plugin.transform.apply(context as any, [
       'return',
       fileName,
     ]);
@@ -77,7 +75,7 @@ describe('rollup-plugin-minify-html-literals', () => {
       ) => minify.Result,
     });
 
-    plugin.transform.apply(context as unknown as TransformPluginContext3, [
+    plugin.transform.apply(context as any, [
       'return',
       fileName,
     ]);
@@ -91,7 +89,7 @@ describe('rollup-plugin-minify-html-literals', () => {
       },
     });
 
-    plugin.transform.apply(context as unknown as TransformPluginContext3, [
+    plugin.transform.apply(context as any, [
       'return',
       fileName,
     ]);
@@ -107,7 +105,7 @@ describe('rollup-plugin-minify-html-literals', () => {
       failOnError: true,
     });
 
-    plugin.transform.apply(context as unknown as TransformPluginContext3, [
+    plugin.transform.apply(context as any, [
       'return',
       fileName,
     ]);
@@ -136,10 +134,28 @@ describe('rollup-plugin-minify-html-literals', () => {
     };
 
     const plugin = minifyHTML(options);
-    plugin.transform.apply(context as unknown as TransformPluginContext3, [
+    plugin.transform.apply(context as any, [
       'return',
       fileName,
     ]);
     expect(options.filter.calledWith()).to.be.true;
   });
 });
+
+import * as rollup3 from 'rollup-3';
+
+rollup3.rollup({
+  input: './test/rollup-entry-test.js',
+  plugins: [minifyHTML() as unknown as rollup3.Plugin]
+}).then(bundle => {
+  console.log('BUNLDE',bundle)
+})
+
+import * as rollup4 from 'rollup-4';
+
+rollup4.rollup({
+  input: './test/rollup-entry-test.js',
+  plugins: [minifyHTML() as rollup4.Plugin]
+}).then(bundle => {
+  console.log('BUNLDE1234',bundle)
+})
