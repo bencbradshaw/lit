@@ -1,6 +1,7 @@
-import {expect} from 'chai';
+import {expect} from '@esm-bundle/chai';
 import * as path from 'path';
-import {TransformPluginContext} from 'rollup';
+import {TransformPluginContext as TransformPluginContext3} from 'rollup-3';
+// import {TransformPluginContext as TransformPluginContext4} from 'rollup-4';
 import sinon from 'sinon';
 import * as minify from '../lib/minify-html-literals.js';
 import minifyHTML, {Options} from '../index.js';
@@ -27,7 +28,7 @@ describe('rollup-plugin-minify-html-literals', () => {
     const plugin = minifyHTML(options);
     expect(options.minifyHTMLLiterals).to.be.a('function');
     const minifySpy = sinon.spy(options, 'minifyHTMLLiterals');
-    plugin.transform.apply(context as unknown as TransformPluginContext, [
+    plugin.transform.apply(context as unknown as TransformPluginContext3, [
       'return',
       fileName,
     ]);
@@ -45,7 +46,7 @@ describe('rollup-plugin-minify-html-literals', () => {
 
     const plugin = minifyHTML(options);
     const minifySpy = sinon.spy(options, 'minifyHTMLLiterals');
-    plugin.transform.apply(context as unknown as TransformPluginContext, [
+    plugin.transform.apply(context as unknown as TransformPluginContext3, [
       'return',
       fileName,
     ]);
@@ -76,7 +77,7 @@ describe('rollup-plugin-minify-html-literals', () => {
       ) => minify.Result,
     });
 
-    plugin.transform.apply(context as unknown as TransformPluginContext, [
+    plugin.transform.apply(context as unknown as TransformPluginContext3, [
       'return',
       fileName,
     ]);
@@ -90,7 +91,7 @@ describe('rollup-plugin-minify-html-literals', () => {
       },
     });
 
-    plugin.transform.apply(context as unknown as TransformPluginContext, [
+    plugin.transform.apply(context as unknown as TransformPluginContext3, [
       'return',
       fileName,
     ]);
@@ -106,7 +107,7 @@ describe('rollup-plugin-minify-html-literals', () => {
       failOnError: true,
     });
 
-    plugin.transform.apply(context as unknown as TransformPluginContext, [
+    plugin.transform.apply(context as unknown as TransformPluginContext3, [
       'return',
       fileName,
     ]);
@@ -135,7 +136,7 @@ describe('rollup-plugin-minify-html-literals', () => {
     };
 
     const plugin = minifyHTML(options);
-    plugin.transform.apply(context as unknown as TransformPluginContext, [
+    plugin.transform.apply(context as unknown as TransformPluginContext3, [
       'return',
       fileName,
     ]);

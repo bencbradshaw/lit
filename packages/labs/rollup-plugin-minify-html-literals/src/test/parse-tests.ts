@@ -1,4 +1,4 @@
-import {expect} from 'chai';
+import {expect} from '@esm-bundle/chai';
 import {parseLiterals} from '../lib/parse-literals.js';
 
 export interface ParseTestsOptions {

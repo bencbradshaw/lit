@@ -105,12 +105,12 @@ export interface BaseOptions {
  * subset of the MagicString API to overwrite the source code and generate
  * source maps.
  */
+//export type MagicStringLike = Pick<MagicString, 'generateMap' | 'overwrite' | 'toString'>;
 export interface MagicStringLike {
   generateMap(options?: Partial<SourceMapOptions>): SourceMap;
   overwrite(start: number, end: number, content: string): unknown;
   toString(): string;
 }
-
 /**
  * A v3 SourceMap.
  *
@@ -261,6 +261,7 @@ export function minifyHTMLLiterals(
   };
 
   if (!options.MagicString) {
+    // @ts-expect-error - types are different
     options.MagicString = MagicString;
   }
 
@@ -290,6 +291,7 @@ export function minifyHTMLLiterals(
     validate = options.validate || defaultValidation;
   }
 
+  // @ts-expect-error - always defined
   const ms = new options.MagicString(source);
   templates.forEach((template) => {
     const minifyHTML = shouldMinify(template);
@@ -341,7 +343,10 @@ export function minifyHTMLLiterals(
     if (options.generateSourceMap !== false) {
       const generateSourceMap =
         options.generateSourceMap || defaultGenerateSourceMap;
-      map = generateSourceMap(ms, options.fileName || '');
+      map = generateSourceMap(
+        ms,
+        options.fileName || ''
+      ) as unknown as SourceMap;
     }
 
     return {
