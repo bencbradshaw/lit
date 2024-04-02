@@ -1,4 +1,4 @@
-import {expect} from '@esm-bundle/chai';
+import {expect} from 'chai';
 import {minify} from 'html-minifier';
 import {defaultMinifyOptions, defaultStrategy} from '../lib/strategy.js';
 import {TemplatePart} from '../lib/models.js';

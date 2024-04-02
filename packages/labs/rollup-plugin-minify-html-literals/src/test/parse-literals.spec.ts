@@ -1,4 +1,4 @@
-import {expect} from '@esm-bundle/chai';
+import {expect} from 'chai';
 import sinon from 'sinon';
 import {parseLiterals} from '../lib/parse-literals.js';
 import createParseTests from './parse-tests.js';

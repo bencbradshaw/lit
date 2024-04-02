@@ -1,7 +1,7 @@
 import MagicString, {SourceMapOptions} from 'magic-string';
 import {Options as HTMLOptions} from 'html-minifier';
 import Sinon from 'sinon';
-import {expect} from '@esm-bundle/chai';
+import {expect} from 'chai';
 import {ParseLiteralsOptions, parseLiterals} from '../lib/parse-literals.js';
 import {Template, TemplatePart} from '../lib/models.js';
 

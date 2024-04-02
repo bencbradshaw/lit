@@ -1,6 +1,6 @@
-import {expect} from '@esm-bundle/chai';
+import {expect} from 'chai';
 import * as path from 'path';
-import {TransformPluginContext as TransformPluginContext3} from 'rollup-3';
+import {TransformPluginContext as TransformPluginContext3} from 'rollup';
 // import {TransformPluginContext as TransformPluginContext4} from 'rollup-4';
 import sinon from 'sinon';
 import * as minify from '../lib/minify-html-literals.js';
