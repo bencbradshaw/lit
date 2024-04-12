@@ -1,8 +1,11 @@
 import {expect} from 'chai';
+import fs from 'node:fs';
 import * as path from 'path';
+import * as rollup3 from 'rollup-3';
+import * as rollup4 from 'rollup-4';
 import sinon from 'sinon';
-import * as minify from '../lib/minify-html-literals.js';
 import minifyHTML, {type Options} from '../index.js';
+import * as minify from '../lib/minify-html-literals.js';
 
 describe('rollup-plugin-minify-html-literals', () => {
   const fileName = path.resolve('test.js');
@@ -26,10 +29,7 @@ describe('rollup-plugin-minify-html-literals', () => {
     const plugin = minifyHTML(options);
     expect(options.minifyHTMLLiterals).to.be.a('function');
     const minifySpy = sinon.spy(options, 'minifyHTMLLiterals');
-    plugin.transform.apply(context as any , [
-      'return',
-      fileName,
-    ]);
+    plugin.transform.apply(context as any, ['return', fileName]);
     expect(minifySpy.called).to.be.true;
   });
 
@@ -44,10 +44,7 @@ describe('rollup-plugin-minify-html-literals', () => {
 
     const plugin = minifyHTML(options);
     const minifySpy = sinon.spy(options, 'minifyHTMLLiterals');
-    plugin.transform.apply(context as any, [
-      'return',
-      fileName,
-    ]);
+    plugin.transform.apply(context as any, ['return', fileName]);
     expect(
       minifySpy.calledWithMatch(
         sinon.match.string,
@@ -75,10 +72,7 @@ describe('rollup-plugin-minify-html-literals', () => {
       ) => minify.Result,
     });
 
-    plugin.transform.apply(context as any, [
-      'return',
-      fileName,
-    ]);
+    plugin.transform.apply(context as any, ['return', fileName]);
     expect(customMinify.called).to.be.true;
   });
 
@@ -89,10 +83,7 @@ describe('rollup-plugin-minify-html-literals', () => {
       },
     });
 
-    plugin.transform.apply(context as any, [
-      'return',
-      fileName,
-    ]);
+    plugin.transform.apply(context as any, ['return', fileName]);
     expect(context.warn.calledWith('failed')).to.be.true;
     expect(context.error.called).to.be.false;
   });
@@ -105,10 +96,7 @@ describe('rollup-plugin-minify-html-literals', () => {
       failOnError: true,
     });
 
-    plugin.transform.apply(context as any, [
-      'return',
-      fileName,
-    ]);
+    plugin.transform.apply(context as any, ['return', fileName]);
     expect(context.error.calledWith('failed')).to.be.true;
     expect(context.warn.called).to.be.false;
   });
@@ -134,28 +122,55 @@ describe('rollup-plugin-minify-html-literals', () => {
     };
 
     const plugin = minifyHTML(options);
-    plugin.transform.apply(context as any, [
-      'return',
-      fileName,
-    ]);
+    plugin.transform.apply(context as any, ['return', fileName]);
     expect(options.filter.calledWith()).to.be.true;
   });
+  const bundleMin = `
+import { html, css } from 'lit';
+
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function render(title, items, styles) {
+    return html \`<style>\${styles}</style><h1 class="heading">\${title}</h1><button @click="\${() => eventHandler()}"></button><ul>\${items.map((item) => html \`<li>\${item}</li>\`)}</ul>\`;
+}
+function noMinify() {
+    return \`<div>Not tagged</div>\`;
+}
+function taggednoMinify(extra) {
+    return html \`<style>.heading{font-size:24px}\${extra}</style>\`;
+}
+function taggedCSSMinify(extra) {
+    return css \`.heading{font-size:24px}\${extra}\`;
+}
+function cssProperty(property) {
+    const width = '20px';
+    return css \`.foo{font-size:1rem;width:\${width};color:\${property}}\`;
+}
+function eventHandler() {
+    throw new Error('Function not implemented.');
+}
+
+export { cssProperty, noMinify, render, taggedCSSMinify, taggednoMinify };
+  `;
+  it('should bundle with rollup v3', async () => {
+    const bundle = await rollup3.rollup({
+      input: './test/rollup-entry-test.js',
+      plugins: [minifyHTML() as unknown as rollup3.Plugin],
+    });
+    await bundle.write({file: './test/bundle-3.js', format: 'es'});
+    const result = fs.readFileSync('./test/bundle-3.js', 'utf-8');
+    const bundleMin = fs
+      .readFileSync('./test/rollup-entry-result.js', 'utf-8')
+      .replace('//# sourceMappingURL=rollup-entry-result.js.map', '');
+    expect(result).to.be.equal(bundleMin);
+  });
+
+  it('should bundle with rollup v4', async () => {
+    const bundle = await rollup4.rollup({
+      input: './test/rollup-entry-test.js',
+      plugins: [minifyHTML() as rollup4.Plugin],
+    });
+    bundle.write({file: './test/bundle-4.js', format: 'es'});
+    expect(bundle).to.be.an('object');
+  });
 });
-
-import * as rollup3 from 'rollup-3';
-
-rollup3.rollup({
-  input: './test/rollup-entry-test.js',
-  plugins: [minifyHTML() as unknown as rollup3.Plugin]
-}).then(bundle => {
-  console.log('BUNLDE',bundle)
-})
-
-import * as rollup4 from 'rollup-4';
-
-rollup4.rollup({
-  input: './test/rollup-entry-test.js',
-  plugins: [minifyHTML() as rollup4.Plugin]
-}).then(bundle => {
-  console.log('BUNLDE1234',bundle)
-})

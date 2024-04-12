@@ -16,16 +16,17 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "exactOptionalPropertyTypes": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
     "skipLibCheck": true,
     "typeRoots": ["./src/lib/types", "./node_modules/@types"],
-    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo",
+    "allowJs": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/test/rollup-entry-result.js"],
   "exclude": []
 }

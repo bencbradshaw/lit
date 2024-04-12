@@ -86,7 +86,7 @@
     "all": true
   },
   "dependencies": {
-    "clean-css": "^5.3.3",
+    "clean-css": "^4.2.4",
     "html-minifier": "^4.0.0",
     "magic-string": "^0.30.8",
     "rollup-pluginutils": "^2.8.2",
