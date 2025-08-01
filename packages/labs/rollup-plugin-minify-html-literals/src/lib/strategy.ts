@@ -245,3 +245,16 @@ function fixCleanCssTidySelectors(original: string, result: string) {
 
   return result;
 }
+
+// Re-export Lightning CSS strategy components as the primary modern options
+export {
+  LightningCSSStrategy,
+  // Also export backward compatibility aliases
+  LightningCSSStrategy as ModernCSSStrategy,
+  createLightningCSSStrategy,
+  createLightningCSSStrategy as createModernCSSStrategy,
+  lightningStrategy,
+  lightningStrategy as modernStrategy,
+  type LightningCSSOptions,
+  type ModernCSSOptions,
+} from './modern-css-strategy.js';

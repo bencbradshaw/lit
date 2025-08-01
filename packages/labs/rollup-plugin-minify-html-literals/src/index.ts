@@ -1,6 +1,14 @@
-import {Plugin, SourceDescription, TransformHook, PluginContext} from 'rollup';
-import {createFilter} from 'rollup-pluginutils';
+import { Plugin, PluginContext, SourceDescription, TransformHook } from 'rollup';
+import { createFilter } from 'rollup-pluginutils';
 import * as minify from './lib/minify-html-literals.js';
+
+// Re-export Lightning CSS strategy components
+export {
+  LightningCSSStrategy,
+  createLightningCSSStrategy,
+  defaultLightningCSSOptions,
+  type LightningCSSOptions
+} from './lib/modern-css-strategy.js';
 
 /**
  * Plugin options.
