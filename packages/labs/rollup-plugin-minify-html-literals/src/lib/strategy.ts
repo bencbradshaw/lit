@@ -131,10 +131,23 @@ export const defaultStrategy: Strategy<HTMLOptions, CleanCSS.Options> = {
       adjustedMinifyCSSOptions = adjustMinifyCSSOptions(minifyCSSOptions);
     }
 
+    // Check if the original HTML has CSS units after template expressions
+    // that might get stripped by HTML minification (e.g., style="@TEMPLATE_EXPRESSION();px")
+    const hasUnitsInStyleAttributes =
+      /@TEMPLATE_EXPRESSION\(\);[a-zA-Z%]+/.test(html);
+
     let result = minify(html, {
       ...options,
       minifyCSS: adjustedMinifyCSSOptions,
     });
+
+    // If we had units in style attributes and they got stripped, return the original
+    if (
+      hasUnitsInStyleAttributes &&
+      !/@TEMPLATE_EXPRESSION\(\);[a-zA-Z%]+/.test(result)
+    ) {
+      return html;
+    }
 
     if (options.collapseWhitespace) {
       // html-minifier does not support removing newlines inside <svg>
