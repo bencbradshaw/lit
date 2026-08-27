@@ -23,6 +23,7 @@ export * from './directives/map.js';
 export * from './directives/range.js';
 export * from './directives/ref.js';
 export * from './directives/repeat.js';
+export * from './directives/spread.js';
 export * from './directives/style-map.js';
 export * from './directives/template-content.js';
 export * from './directives/unsafe-html.js';

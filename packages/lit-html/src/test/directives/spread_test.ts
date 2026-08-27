@@ -8,7 +8,7 @@ import {html, nothing, render} from 'lit-html';
 import {Directive, directive} from 'lit-html/directive.js';
 import {assert} from 'chai';
 
-import {spread, SpreadValues} from '../../directives/spread.js';
+import {spread, SpreadValues} from 'lit-html/directives/spread.js';
 
 interface ElementWithSpreadProperties extends HTMLElement {
   mixedValue?: unknown;

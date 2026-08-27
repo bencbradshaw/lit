@@ -25,6 +25,7 @@ export const defaultConfig = (options = {}) =>
       'directives/range',
       'directives/ref',
       'directives/repeat',
+      'directives/spread',
       'directives/style-map',
       'directives/template-content',
       'directives/unsafe-html',

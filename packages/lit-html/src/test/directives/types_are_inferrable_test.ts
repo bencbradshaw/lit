@@ -3,9 +3,8 @@ import {guard} from 'lit-html/directives/guard.js';
 import {classMap} from 'lit-html/directives/class-map.js';
 import {keyed} from 'lit-html/directives/keyed.js';
 import {live} from 'lit-html/directives/live.js';
+import {spread, SpreadMode, SpreadValues} from 'lit-html/directives/spread.js';
 import {until} from 'lit-html/directives/until.js';
-
-import {spread, SpreadMode, SpreadValues} from '../../directives/spread.js';
 
 type GetRenderAs<D extends DirectiveResult> =
   D extends DirectiveResult<infer C>

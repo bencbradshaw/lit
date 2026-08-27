@@ -129,6 +129,10 @@
       "types": "./development/directives/repeat.d.ts",
       "default": "./directives/repeat.js"
     },
+    "./directives/spread.js": {
+      "types": "./development/directives/spread.d.ts",
+      "default": "./directives/spread.js"
+    },
     "./directives/style-map.js": {
       "types": "./development/directives/style-map.d.ts",
       "default": "./directives/style-map.js"

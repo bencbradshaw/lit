@@ -247,6 +247,19 @@
       "development": "./development/directives/repeat.js",
       "default": "./directives/repeat.js"
     },
+    "./directives/spread.js": {
+      "types": "./development/directives/spread.d.ts",
+      "browser": {
+        "development": "./development/directives/spread.js",
+        "default": "./directives/spread.js"
+      },
+      "node": {
+        "development": "./node/development/directives/spread.js",
+        "default": "./node/directives/spread.js"
+      },
+      "development": "./development/directives/spread.js",
+      "default": "./directives/spread.js"
+    },
     "./directives/style-map.js": {
       "types": "./development/directives/style-map.d.ts",
       "browser": {
