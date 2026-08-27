@@ -33,6 +33,7 @@ import {unsafeHTML} from 'lit/directives/unsafe-html.js';
 import {unsafeMathML} from 'lit/directives/unsafe-mathml.js';
 import {unsafeSVG} from 'lit/directives/unsafe-svg.js';
 import {createRef, ref} from 'lit/directives/ref.js';
+import {spread} from 'lit/directives/spread.js';
 
 import {LitElement, PropertyValues} from 'lit';
 import {property} from 'lit/decorators/property.js';
@@ -3889,6 +3890,97 @@ export const tests: {[name: string]: SSRTest} = {
       ],
       stableSelectors: ['input'],
     };
+  },
+
+  'ElementPart accepts directive: spread mixed bindings': () => {
+    const handler = (event: Event) => {
+      (event.currentTarget as DivWithProp).prop2 = 'clicked';
+    };
+    return {
+      render(id: string, hidden: boolean, prop: unknown) {
+        return html`
+          <div
+            ${spread({
+              id,
+              '?hidden': hidden,
+              '.prop': prop,
+              '@click': handler,
+            })}
+          ></div>
+        `;
+      },
+      expectations: [
+        {
+          args: ['first', true, 'one'],
+          html: '<div id="first" hidden></div>',
+          check(assert: Chai.Assert, dom: HTMLElement) {
+            const div = dom.querySelector('div') as DivWithProp;
+            assert.strictEqual(div.prop, 'one');
+            div.click();
+            assert.strictEqual(div.prop2, 'clicked');
+          },
+        },
+        {
+          args: ['second', false, 'two'],
+          html: '<div id="second"></div>',
+          check(assert: Chai.Assert, dom: HTMLElement) {
+            const div = dom.querySelector('div') as DivWithProp;
+            assert.strictEqual(div.prop, 'two');
+          },
+        },
+      ],
+      stableSelectors: ['div'],
+    };
+  },
+
+  'ElementPart spread bindings respect source order during SSR and hydration': {
+    render(value: string) {
+      return html`
+        <div id="static-left" ${spread({id: `spread-${value}`})}></div>
+        <div ${spread({id: `spread-${value}`})} id="static-right"></div>
+        <div
+          id=${`explicit-left-${value}`}
+          ${spread({id: `spread-${value}`})}
+        ></div>
+        <div
+          ${spread({id: `spread-${value}`})}
+          id=${`explicit-right-${value}`}
+        ></div>
+        <div
+          ${spread({id: `first-${value}`})}
+          ${spread({id: `last-${value}`})}
+        ></div>
+      `;
+    },
+    expectations: [
+      {
+        args: ['one'],
+        html: `
+          <div id="spread-one"></div>
+          <div id="static-right"></div>
+          <div id="spread-one"></div>
+          <div id="explicit-right-one"></div>
+          <div id="last-one"></div>
+        `,
+      },
+      {
+        args: ['two'],
+        html: `
+          <div id="spread-two"></div>
+          <div id="static-right"></div>
+          <div id="spread-two"></div>
+          <div id="explicit-right-two"></div>
+          <div id="last-two"></div>
+        `,
+      },
+    ],
+    stableSelectors: [
+      'div:nth-of-type(1)',
+      'div:nth-of-type(2)',
+      'div:nth-of-type(3)',
+      'div:nth-of-type(4)',
+      'div:nth-of-type(5)',
+    ],
   },
 
   /******************************************************

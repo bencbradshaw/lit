@@ -337,7 +337,10 @@ class SpreadCoordinator {
           this._getCommittedValue(explicitBinding.part)
         );
       }
-    } else if (staticBinding?.order === winnerOrder) {
+    } else if (
+      staticBinding?.order === winnerOrder &&
+      this._element.getAttribute(staticBinding.name) !== staticBinding.value
+    ) {
       this._element.setAttribute(staticBinding.name, staticBinding.value);
     }
   }
@@ -355,14 +358,48 @@ class SpreadCoordinator {
     ) {
       committed?.part._$setValue(nothing);
       committed = {binding, part: this._createPart(binding)};
+      this._primePart(committed.part, binding);
       this._committed.set(target, committed);
     } else {
       committed.binding = binding;
     }
     committed.part._$setValue(binding.value);
-    if (restoreAfterExplicit && committed.part.type !== PartType.EVENT) {
+    if (
+      restoreAfterExplicit &&
+      committed.part.type !== PartType.EVENT &&
+      !this._matchesBinding(binding)
+    ) {
       committed.part._commitValue(this._getCommittedValue(committed.part));
     }
+  }
+
+  private _primePart(part: SpreadPart, binding: SpreadBinding) {
+    if (this._matchesBinding(binding)) {
+      part._$committedValue = binding.value;
+    }
+  }
+
+  private _matchesBinding(binding: SpreadBinding) {
+    if (binding.type === PartType.ATTRIBUTE) {
+      const expected =
+        binding.value === nothing
+          ? null
+          : binding.value == null
+            ? ''
+            : String(binding.value);
+      return this._element.getAttribute(binding.name) === expected;
+    }
+    if (binding.type === PartType.BOOLEAN_ATTRIBUTE) {
+      const expected = !!binding.value && binding.value !== nothing;
+      return this._element.hasAttribute(binding.name) === expected;
+    }
+    if (binding.type === PartType.PROPERTY) {
+      return Object.is(
+        (this._element as unknown as {[name: string]: unknown})[binding.name],
+        binding.value === nothing ? undefined : binding.value
+      );
+    }
+    return false;
   }
 
   private _getCommittedValue(part: SpreadPart) {
@@ -430,6 +467,9 @@ class SpreadCoordinator {
 }
 
 class SpreadDirective extends AsyncDirective {
+  /** @internal Used by the Lit SSR renderer to identify this directive. */
+  static ['litSpreadDirective'] = true;
+
   private _coordinator?: SpreadCoordinator;
   private _registration?: SpreadRegistration;
 

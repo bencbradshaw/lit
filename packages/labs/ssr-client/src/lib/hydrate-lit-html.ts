@@ -31,6 +31,14 @@ const NODE_MODE = false;
 const {TemplateInstance, isIterable, resolveDirective, ChildPart, ElementPart} =
   _$LH;
 
+const isSpreadDirectiveResult = (value: unknown) =>
+  (
+    value as
+      | {['_$litDirective$']?: {litSpreadDirective?: boolean}}
+      | null
+      | undefined
+  )?.['_$litDirective$']?.litSpreadDirective === true;
+
 type ChildPart = InstanceType<typeof ChildPart>;
 type TemplateInstance = InstanceType<typeof TemplateInstance>;
 
@@ -374,6 +382,11 @@ const createAttributeParts = (
   const state = stack[stack.length - 1];
   if (state.type === 'template-instance') {
     const instance = state.instance;
+    const initializeAttributeParts: Array<() => void> = [];
+    const initializeElementParts: Array<{
+      initialize: () => void;
+      isSpread: boolean;
+    }> = [];
     // eslint-disable-next-line no-constant-condition
     while (true) {
       // If the next template part is in attribute-position on the current node,
@@ -404,6 +417,7 @@ const createAttributeParts = (
         )
           ? state.result.values[state.instancePartIndex]
           : state.result.values;
+        const valueIndex = state.instancePartIndex;
 
         // Setting the attribute value primes committed value with the resolved
         // directive value; we only then commit that value for event/property
@@ -413,28 +427,52 @@ const createAttributeParts = (
           instancePart.type === PartType.EVENT ||
           instancePart.type === PartType.PROPERTY
         );
-        (
-          instancePart as AttributePart & {
-            _$setValue(
-              value: unknown,
-              directiveParent: DirectiveParent,
-              valueIndex?: number,
-              noCommit?: boolean
-            ): void;
-          }
-        )._$setValue(value, instancePart, state.instancePartIndex, noCommit);
         state.instancePartIndex += templatePart.strings.length - 1;
         instance._$parts.push(instancePart);
+        initializeAttributeParts.push(() =>
+          (
+            instancePart as AttributePart & {
+              _$setValue(
+                value: unknown,
+                directiveParent: DirectiveParent,
+                valueIndex?: number,
+                noCommit?: boolean
+              ): void;
+            }
+          )._$setValue(value, instancePart, valueIndex, noCommit)
+        );
       } else {
         // templatePart.type === PartType.ELEMENT
-        const instancePart = new ElementPart(node, state.instance, options);
-        resolveDirective(
-          instancePart,
-          state.result.values[state.instancePartIndex++]
+        const instancePart = new ElementPart(
+          node,
+          state.instance,
+          options,
+          templatePart.staticAttributes
         );
+        const value = state.result.values[state.instancePartIndex++];
         instance._$parts.push(instancePart);
+        initializeElementParts.push({
+          initialize: () => {
+            resolveDirective(instancePart, value);
+          },
+          isSpread: isSpreadDirectiveResult(value),
+        });
       }
       state.templatePartIndex++;
+    }
+    for (const initializePart of initializeAttributeParts) {
+      initializePart();
+    }
+    // Spreads coordinate with every other binding on their element. Hydrate
+    // them right-to-left so that an earlier spread knows about later spreads
+    // before it attempts to commit, matching the server-rendered winner
+    // without transient DOM mutations.
+    const spreadInitializers = initializeElementParts
+      .filter(({isSpread}) => isSpread)
+      .map(({initialize}) => initialize)
+      .reverse();
+    for (const part of initializeElementParts) {
+      (part.isSpread ? spreadInitializers.shift()! : part.initialize)();
     }
   } else {
     // TODO(augustjk): This message may need to be updated based on
