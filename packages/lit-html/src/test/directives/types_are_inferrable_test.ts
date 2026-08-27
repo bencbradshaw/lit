@@ -5,6 +5,8 @@ import {keyed} from 'lit-html/directives/keyed.js';
 import {live} from 'lit-html/directives/live.js';
 import {until} from 'lit-html/directives/until.js';
 
+import {spread, SpreadMode, SpreadValues} from '../../directives/spread.js';
+
 type GetRenderAs<D extends DirectiveResult> =
   D extends DirectiveResult<infer C>
     ? C extends {new (...args: any[]): {render(...args: any[]): infer RenderAs}}
@@ -18,6 +20,37 @@ type GetRenderAs<D extends DirectiveResult> =
 // This test is entirely in the type checkeer, it doesn't need to run,
 // it passes if it compiles without error.
 if (false as boolean) {
+  // Test the spread directive's overloads
+  () => {
+    const values: SpreadValues = {
+      id: 'target',
+      '?disabled': true,
+      '.value': 'value',
+      '@click': () => {},
+    };
+    const mode: SpreadMode = 'property';
+
+    spread(values);
+    spread(null);
+    spread(undefined);
+    spread('attribute', values);
+    spread('boolean', values);
+    spread('property', values);
+    spread('event', values);
+    spread(mode, values);
+    spread(mode, null);
+    spread(mode, undefined);
+
+    // @ts-expect-error Invalid mode
+    spread('properties', values);
+    // @ts-expect-error Mode overload requires a values argument
+    spread('property');
+    // @ts-expect-error Mixed-bag overload accepts only one argument
+    spread(values, values);
+    // @ts-expect-error Values must be an object or nullish
+    spread(42);
+  };
+
   // Test the guard directive's type inference
   () => {
     const v = guard([1, 2, 3], () => 'hi');

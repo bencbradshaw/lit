@@ -1008,7 +1008,13 @@ class Template {
         // increment the bindingIndex, and it'll be off by 1 in the element
         // and off by two after it.
         if ((node as Element).hasAttributes()) {
-          for (const name of (node as Element).getAttributeNames()) {
+          const attributeNames = (node as Element).getAttributeNames();
+          const staticAttributes = attributeNames.some((name) =>
+            name.startsWith(marker)
+          )
+            ? ([] as ElementPartStaticAttribute[])
+            : undefined;
+          for (const name of attributeNames) {
             if (name.endsWith(boundAttributeSuffix)) {
               const realName = attrNames[attrNameIndex++];
               const value = (node as Element).getAttribute(name)!;
@@ -1033,8 +1039,17 @@ class Template {
               parts.push({
                 type: ELEMENT_PART,
                 index: nodeIndex,
+                staticAttributes,
               });
               (node as Element).removeAttribute(name);
+            } else {
+              staticAttributes?.push({
+                name,
+                value: (node as Element).getAttribute(name)!,
+                // Static attributes don't create Parts. Placing them halfway
+                // between the surrounding Parts records their source order.
+                order: parts.length - 0.5,
+              });
             }
           }
         }
@@ -1247,7 +1262,12 @@ class TemplateInstance implements Disconnectable {
             options
           );
         } else if (templatePart.type === ELEMENT_PART) {
-          part = new ElementPart(node as HTMLElement, this, options);
+          part = new ElementPart(
+            node as HTMLElement,
+            this,
+            options,
+            templatePart.staticAttributes
+          );
         }
         this._$parts.push(part);
         templatePart = parts[++partIndex];
@@ -1309,6 +1329,7 @@ type ChildTemplatePart = {
 type ElementTemplatePart = {
   readonly type: typeof ELEMENT_PART;
   readonly index: number;
+  readonly staticAttributes?: ReadonlyArray<ElementPartStaticAttribute>;
 };
 type CommentTemplatePart = {
   readonly type: typeof COMMENT_PART;
@@ -2119,6 +2140,11 @@ class EventPart extends AttributePart {
 }
 
 export type {ElementPart};
+interface ElementPartStaticAttribute {
+  readonly name: string;
+  readonly value: string;
+  readonly order: number;
+}
 class ElementPart implements Disconnectable {
   readonly type = ELEMENT_PART;
 
@@ -2136,13 +2162,18 @@ class ElementPart implements Disconnectable {
 
   options: RenderOptions | undefined;
 
+  /** @internal */
+  readonly _$staticAttributes?: ReadonlyArray<ElementPartStaticAttribute>;
+
   constructor(
     public element: Element,
     parent: Disconnectable,
-    options: RenderOptions | undefined
+    options: RenderOptions | undefined,
+    staticAttributes?: ReadonlyArray<ElementPartStaticAttribute>
   ) {
     this._$parent = parent;
     this.options = options;
+    this._$staticAttributes = staticAttributes;
   }
 
   // See comment in Disconnectable interface for why this is a getter
