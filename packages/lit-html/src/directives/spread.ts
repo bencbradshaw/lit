@@ -73,6 +73,8 @@ interface ExplicitBinding {
   readonly part: SpreadPart;
 }
 
+type SetValue = (...args: unknown[]) => void;
+
 interface StaticBinding {
   readonly name: string;
   readonly order: number;
@@ -85,6 +87,8 @@ interface TemplateInstanceLike {
 }
 
 const coordinators = new WeakMap<Element, SpreadCoordinator>();
+const originalSetValues = new WeakMap<SpreadPart, SetValue>();
+const explicitObservers = new WeakMap<SpreadPart, () => void>();
 
 const normalizeAttributeName = (element: Element, name: string) =>
   element.namespaceURI === HTML_NAMESPACE ? name.toLowerCase() : name;
@@ -205,6 +209,7 @@ class SpreadCoordinator {
   private readonly _explicit = new Map<string, ExplicitBinding>();
   private readonly _static = new Map<string, StaticBinding>();
   private readonly _suppressedEvents = new Set<EventPart>();
+  private readonly _observedExplicit = new Set<SpreadPart>();
   private readonly _element: Element;
   private readonly _parent: ElementPart['_$parent'];
   private readonly _options: ElementPart['options'];
@@ -224,6 +229,7 @@ class SpreadCoordinator {
         binding !== undefined &&
         (sibling as AttributePart).element === part.element
       ) {
+        this._observeExplicitBinding(binding.target, sibling as SpreadPart);
         this._explicit.set(binding.target, {
           order,
           part: sibling as SpreadPart,
@@ -280,6 +286,9 @@ class SpreadCoordinator {
       this._commitTarget(target, registration.order);
     }
     if (this._registrations.length === 0) {
+      for (const part of this._observedExplicit) {
+        explicitObservers.delete(part);
+      }
       coordinators.delete(this._element);
     }
   }
@@ -292,7 +301,11 @@ class SpreadCoordinator {
       winnerOrder = staticBinding.order;
     }
     const explicitBinding = this._explicit.get(target);
-    if (explicitBinding !== undefined && explicitBinding.order > winnerOrder) {
+    if (
+      explicitBinding !== undefined &&
+      this._isActive(explicitBinding.part) &&
+      explicitBinding.order > winnerOrder
+    ) {
       winnerOrder = explicitBinding.order;
     }
     for (const registration of this._registrations) {
@@ -343,6 +356,26 @@ class SpreadCoordinator {
     ) {
       this._element.setAttribute(staticBinding.name, staticBinding.value);
     }
+  }
+
+  private _isActive(part: SpreadPart) {
+    return this._getCommittedValue(part) !== nothing;
+  }
+
+  private _observeExplicitBinding(target: string, part: SpreadPart) {
+    let originalSetValue = originalSetValues.get(part);
+    if (originalSetValue === undefined) {
+      originalSetValue = part._$setValue.bind(part) as SetValue;
+      originalSetValues.set(part, originalSetValue);
+      (part as SpreadPart & {_$setValue: SetValue})._$setValue = (
+        ...args: unknown[]
+      ) => {
+        originalSetValues.get(part)!(...args);
+        explicitObservers.get(part)?.();
+      };
+    }
+    this._observedExplicit.add(part);
+    explicitObservers.set(part, () => this._commitTarget(target, Infinity));
   }
 
   private _commitSpread(

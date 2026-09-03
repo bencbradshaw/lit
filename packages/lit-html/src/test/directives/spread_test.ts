@@ -447,6 +447,21 @@ suite('spread', () => {
     assert.equal(element.getAttribute('title'), 'explicit');
   });
 
+  test('restores an earlier spread when an explicit binding is nothing', () => {
+    const go = (explicit: unknown) =>
+      render(
+        html`<div ${spread({title: 'spread'})} title=${explicit}></div>`,
+        container
+      );
+
+    go('explicit');
+    const element = container.firstElementChild!;
+    assert.equal(element.getAttribute('title'), 'explicit');
+
+    go(nothing);
+    assert.equal(element.getAttribute('title'), 'spread');
+  });
+
   test('source order applies to property bindings', () => {
     const go = (
       explicit: unknown,
@@ -552,6 +567,29 @@ suite('spread', () => {
     go(spreadTwo);
     button.click();
     assert.deepEqual(calls, ['explicit', 'explicit']);
+  });
+
+  test('restores an earlier spread when an explicit event is nothing', () => {
+    const calls: string[] = [];
+    const spreadListener = () => calls.push('spread');
+    const explicitListener = () => calls.push('explicit');
+    const go = (listener: unknown) =>
+      render(
+        html`<button
+          ${spread('event', {click: spreadListener})}
+          @click=${listener}
+        ></button>`,
+        container
+      );
+
+    go(explicitListener);
+    const button = container.firstElementChild as HTMLButtonElement;
+    button.click();
+    assert.deepEqual(calls, ['explicit']);
+
+    go(nothing);
+    button.click();
+    assert.deepEqual(calls, ['explicit', 'spread']);
   });
 
   test('throws when a binding name is empty', () => {
