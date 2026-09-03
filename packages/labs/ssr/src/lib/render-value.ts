@@ -134,11 +134,28 @@ type ChildPartOp = {
 type AttributePartOp = {
   type: 'attribute-part';
   index: number;
+  order: number;
   name: string;
   ctor: typeof AttributePart;
   strings: Array<string>;
   tagName: string;
+  namespaceURI: string;
   useCustomElementInstance?: boolean;
+};
+
+/**
+ * Operation to output a static attribute on an element that also contains an
+ * element binding. Static attributes on these elements must be deferred so a
+ * spread directive can override them according to template source order.
+ */
+type StaticAttributePartOp = {
+  type: 'static-attribute-part';
+  index: number;
+  order: number;
+  name: string;
+  value: string;
+  source: string;
+  namespaceURI: string;
 };
 
 /**
@@ -149,6 +166,10 @@ type AttributePartOp = {
 type ElementPartOp = {
   type: 'element-part';
   index: number;
+  order: number;
+  tagName: string;
+  namespaceURI: string;
+  useCustomElementInstance?: boolean;
 };
 
 /**
@@ -156,9 +177,12 @@ type ElementPartOp = {
  */
 type CustomElementOpenOp = {
   type: 'custom-element-open';
+  index: number;
   tagName: string;
   ctor: {new (): HTMLElement};
   staticAttributes: Map<string, string>;
+  staticAttributeOrders: Map<string, number>;
+  namespaceURI: string;
 };
 
 /**
@@ -237,6 +261,7 @@ type Op =
   | TextOp
   | ChildPartOp
   | AttributePartOp
+  | StaticAttributePartOp
   | ElementPartOp
   | CustomElementOpenOp
   | CustomElementAttributesOp
@@ -247,6 +272,141 @@ type Op =
   | SlottedElementOpenOp
   | SlottedElementCloseOp
   | PossibleNodeMarkerOp;
+
+const HTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
+
+type SpreadBindingType =
+  | typeof PartType.ATTRIBUTE
+  | typeof PartType.BOOLEAN_ATTRIBUTE
+  | typeof PartType.PROPERTY
+  | typeof PartType.EVENT;
+
+type SSRSpreadBinding = {
+  name: string;
+  target: string;
+  type: SpreadBindingType;
+  value: unknown;
+};
+
+type AttributeWinner = {
+  order: number;
+  op: Op;
+  binding?: SSRSpreadBinding;
+};
+
+const normalizeAttributeName = (namespaceURI: string, name: string) =>
+  namespaceURI === HTML_NAMESPACE ? name.toLowerCase() : name;
+
+const bindingTarget = (type: SpreadBindingType, name: string) => {
+  switch (type) {
+    case PartType.ATTRIBUTE:
+    case PartType.BOOLEAN_ATTRIBUTE:
+      return `attribute:${name}`;
+    case PartType.PROPERTY:
+      return `property:${name}`;
+    case PartType.EVENT:
+      return `event:${name}`;
+  }
+};
+
+const bindingTypeForAttributeOp = (op: AttributePartOp): SpreadBindingType =>
+  op.ctor === PropertyPart
+    ? PartType.PROPERTY
+    : op.ctor === BooleanAttributePart
+      ? PartType.BOOLEAN_ATTRIBUTE
+      : op.ctor === EventPart
+        ? PartType.EVENT
+        : PartType.ATTRIBUTE;
+
+const getSpreadValues = (value: unknown): unknown[] | undefined => {
+  const ctor = getDirectiveClass(value) as
+    | {['litSpreadDirective']?: boolean}
+    | undefined;
+  return ctor?.['litSpreadDirective'] === true
+    ? (value as {values: unknown[]}).values
+    : undefined;
+};
+
+const normalizeSpreadBindings = (
+  namespaceURI: string,
+  args: unknown[]
+): SSRSpreadBinding[] => {
+  const modeOrValues = args[0];
+  const mode = typeof modeOrValues === 'string' ? modeOrValues : undefined;
+  const values = mode === undefined ? modeOrValues : args[1];
+  if (
+    mode !== undefined &&
+    mode !== 'attribute' &&
+    mode !== 'boolean' &&
+    mode !== 'property' &&
+    mode !== 'event'
+  ) {
+    throw new Error(
+      `The \`${mode}\` spread mode is invalid. Expected \`attribute\`, ` +
+        '`boolean`, `property`, or `event`.'
+    );
+  }
+  if (values == null) {
+    return [];
+  }
+  if (typeof values !== 'object' && typeof values !== 'function') {
+    throw new TypeError('The values passed to `spread()` must be an object.');
+  }
+
+  const bindings = new Map<string, SSRSpreadBinding>();
+  for (const sourceName of Object.keys(values)) {
+    let type: SpreadBindingType;
+    let name: string;
+    if (mode === 'attribute') {
+      type = PartType.ATTRIBUTE;
+      name = sourceName;
+    } else if (mode === 'boolean') {
+      type = PartType.BOOLEAN_ATTRIBUTE;
+      name = sourceName;
+    } else if (mode === 'property') {
+      type = PartType.PROPERTY;
+      name = sourceName;
+    } else if (mode === 'event') {
+      type = PartType.EVENT;
+      name = sourceName;
+    } else {
+      const prefix = sourceName[0];
+      if (prefix === '.') {
+        type = PartType.PROPERTY;
+        name = sourceName.slice(1);
+      } else if (prefix === '?') {
+        type = PartType.BOOLEAN_ATTRIBUTE;
+        name = sourceName.slice(1);
+      } else if (prefix === '@') {
+        type = PartType.EVENT;
+        name = sourceName.slice(1);
+      } else {
+        type = PartType.ATTRIBUTE;
+        name = sourceName;
+      }
+    }
+    if (name === '') {
+      throw new Error('A `spread()` binding name must not be empty.');
+    }
+    if (type === PartType.ATTRIBUTE || type === PartType.BOOLEAN_ATTRIBUTE) {
+      name = normalizeAttributeName(namespaceURI, name);
+    }
+    const target = bindingTarget(type, name);
+    if (bindings.has(target)) {
+      throw new Error(
+        `The \`${sourceName}\` entry passed to \`spread()\` targets the same ` +
+          'element binding as another entry in the object.'
+      );
+    }
+    bindings.set(target, {
+      name,
+      target,
+      type,
+      value: (values as {[name: string]: unknown})[sourceName],
+    });
+  }
+  return [...bindings.values()];
+};
 
 /**
  * Any of these top level tags will be removed by parse5's `parseFragment` and
@@ -431,6 +591,18 @@ const getTemplateOpcodes = (result: TemplateResult) => {
         let boundAttributesCount = 0;
 
         const tagName = node.tagName;
+        const namespaceURI = node.namespaceURI;
+        const attrInfo = node.attrs.map((attr) => {
+          const isAttrBinding = attr.name.endsWith(boundAttributeSuffix);
+          const isElementBinding = attr.name.startsWith(marker);
+          if (isAttrBinding || isElementBinding) {
+            boundAttributesCount += 1;
+          }
+          return [isAttrBinding, isElementBinding, attr] as const;
+        });
+        const hasElementBinding = attrInfo.some(([, isElementBinding]) =>
+          Boolean(isElementBinding)
+        );
 
         if (
           node.parentNode &&
@@ -455,13 +627,26 @@ const getTemplateOpcodes = (result: TemplateResult) => {
             node.isDefinedCustomElement = true;
             ops.push({
               type: 'custom-element-open',
+              index: nodeIndex,
               tagName,
               ctor,
               staticAttributes: new Map(
-                node.attrs
-                  .filter((attr) => !attr.name.endsWith(boundAttributeSuffix))
-                  .map((attr) => [attr.name, attr.value])
+                attrInfo
+                  .filter(
+                    ([isAttrBinding, isElementBinding]) =>
+                      !isAttrBinding && !isElementBinding
+                  )
+                  .map(([, , attr]) => [attr.name, attr.value])
               ),
+              staticAttributeOrders: new Map(
+                attrInfo.flatMap(
+                  ([isAttrBinding, isElementBinding, attr], order) =>
+                    !isAttrBinding && !isElementBinding
+                      ? [[attr.name, order] as const]
+                      : []
+                )
+              ),
+              namespaceURI,
             });
           }
         } else if (tagName === 'slot') {
@@ -472,14 +657,6 @@ const getTemplateOpcodes = (result: TemplateResult) => {
             name: node.attrs.find((a) => a.name === 'name')?.value,
           });
         }
-        const attrInfo = node.attrs.map((attr) => {
-          const isAttrBinding = attr.name.endsWith(boundAttributeSuffix);
-          const isElementBinding = attr.name.startsWith(marker);
-          if (isAttrBinding || isElementBinding) {
-            boundAttributesCount += 1;
-          }
-          return [isAttrBinding, isElementBinding, attr] as const;
-        });
         if (boundAttributesCount > 0 || node.isDefinedCustomElement) {
           // We (may) need to emit a `<!-- lit-node -->` comment marker to
           // indicate the following node needs to be identified during
@@ -496,7 +673,10 @@ const getTemplateOpcodes = (result: TemplateResult) => {
             nodeIndex,
           });
         }
-        for (const [isAttrBinding, isElementBinding, attr] of attrInfo) {
+        for (const [
+          order,
+          [isAttrBinding, isElementBinding, attr],
+        ] of attrInfo.entries()) {
           if (isAttrBinding || isElementBinding) {
             // Note that although we emit a lit-node comment marker for any
             // nodes with bindings, we don't account for it in the nodeIndex because
@@ -529,6 +709,7 @@ const getTemplateOpcodes = (result: TemplateResult) => {
               ops.push({
                 type: 'attribute-part',
                 index: nodeIndex,
+                order,
                 name: caseSensitiveName,
                 ctor:
                   prefix === '.'
@@ -540,6 +721,7 @@ const getTemplateOpcodes = (result: TemplateResult) => {
                         : AttributePart,
                 strings,
                 tagName: tagName.toUpperCase(),
+                namespaceURI,
                 useCustomElementInstance: node.isDefinedCustomElement,
               });
             } else {
@@ -550,6 +732,10 @@ const getTemplateOpcodes = (result: TemplateResult) => {
               ops.push({
                 type: 'element-part',
                 index: nodeIndex,
+                order,
+                tagName: tagName.toUpperCase(),
+                namespaceURI,
+                useCustomElementInstance: node.isDefinedCustomElement,
               });
             }
             skipTo(attrEndOffset);
@@ -562,6 +748,23 @@ const getTemplateOpcodes = (result: TemplateResult) => {
             const attrSourceLocation =
               node.sourceCodeLocation!.attrs![attr.name]!;
             flushTo(attrSourceLocation.startOffset);
+            skipTo(attrSourceLocation.endOffset);
+          } else if (hasElementBinding) {
+            const attrSourceLocation =
+              node.sourceCodeLocation!.attrs![attr.name]!;
+            flushTo(attrSourceLocation.startOffset);
+            ops.push({
+              type: 'static-attribute-part',
+              index: nodeIndex,
+              order,
+              name: attr.name,
+              value: attr.value,
+              source: htmlString.substring(
+                attrSourceLocation.startOffset,
+                attrSourceLocation.endOffset
+              ),
+              namespaceURI,
+            });
             skipTo(attrSourceLocation.endOffset);
           }
         }
@@ -815,6 +1018,83 @@ function renderTemplateResult(
   const hydratable = isHydratable(result);
   const ops = getTemplateOpcodes(result);
 
+  const valueIndexByOp = new Map<AttributePartOp | ElementPartOp, number>();
+  let indexedPart = 0;
+  for (const op of ops) {
+    if (op.type === 'child-part') {
+      indexedPart++;
+    } else if (op.type === 'attribute-part') {
+      valueIndexByOp.set(op, indexedPart);
+      indexedPart += op.strings.length - 1;
+    } else if (op.type === 'element-part') {
+      valueIndexByOp.set(op, indexedPart++);
+    }
+  }
+
+  const nodesWithElementParts = new Set(
+    ops.flatMap((op) => (op.type === 'element-part' ? [op.index] : []))
+  );
+  const attributeWinners = new Map<number, Map<string, AttributeWinner>>();
+  const spreadBindingsByOp = new Map<ElementPartOp, SSRSpreadBinding[]>();
+  const setWinner = (
+    index: number,
+    target: string,
+    winner: AttributeWinner
+  ) => {
+    let winners = attributeWinners.get(index);
+    if (winners === undefined) {
+      attributeWinners.set(index, (winners = new Map()));
+    }
+    const current = winners.get(target);
+    if (current === undefined || winner.order > current.order) {
+      winners.set(target, winner);
+    }
+  };
+
+  for (const op of ops) {
+    if (!('index' in op) || !nodesWithElementParts.has(op.index)) {
+      continue;
+    }
+    if (op.type === 'custom-element-open') {
+      for (const name of op.staticAttributes.keys()) {
+        const normalizedName = normalizeAttributeName(op.namespaceURI, name);
+        setWinner(op.index, bindingTarget(PartType.ATTRIBUTE, normalizedName), {
+          order: op.staticAttributeOrders.get(name)!,
+          op,
+        });
+      }
+    } else if (op.type === 'static-attribute-part') {
+      const name = normalizeAttributeName(op.namespaceURI, op.name);
+      setWinner(op.index, bindingTarget(PartType.ATTRIBUTE, name), {
+        order: op.order,
+        op,
+      });
+    } else if (op.type === 'attribute-part') {
+      const type = bindingTypeForAttributeOp(op);
+      const name =
+        type === PartType.ATTRIBUTE || type === PartType.BOOLEAN_ATTRIBUTE
+          ? normalizeAttributeName(op.namespaceURI, op.name)
+          : op.name;
+      setWinner(op.index, bindingTarget(type, name), {
+        order: op.order,
+        op,
+      });
+    } else if (op.type === 'element-part') {
+      const values = getSpreadValues(result.values[valueIndexByOp.get(op)!]);
+      if (values !== undefined) {
+        const bindings = normalizeSpreadBindings(op.namespaceURI, values);
+        spreadBindingsByOp.set(op, bindings);
+        for (const binding of bindings) {
+          setWinner(op.index, binding.target, {
+            order: op.order,
+            op,
+            binding,
+          });
+        }
+      }
+    }
+  }
+
   /* The next value in result.values to render */
   let partIndex = 0;
   const renderResult: ThunkedRenderResult = [];
@@ -842,6 +1122,19 @@ And the inner template was:
             }
           }
           return renderValue(value, renderInfo, isValueHydratable);
+        });
+        break;
+      }
+      case 'static-attribute-part': {
+        renderResult.push(() => {
+          const name = normalizeAttributeName(op.namespaceURI, op.name);
+          const winner = attributeWinners
+            .get(op.index)
+            ?.get(bindingTarget(PartType.ATTRIBUTE, name));
+          return winner === undefined ||
+            (winner.op === op && winner.order === op.order)
+            ? op.source
+            : undefined;
         });
         break;
       }
@@ -873,8 +1166,19 @@ And the inner template was:
             );
           }
           let attributeResult: string | undefined = undefined;
+          const type = bindingTypeForAttributeOp(op);
+          const name =
+            type === PartType.ATTRIBUTE || type === PartType.BOOLEAN_ATTRIBUTE
+              ? normalizeAttributeName(op.namespaceURI, op.name)
+              : op.name;
+          const winner = attributeWinners
+            .get(op.index)
+            ?.get(bindingTarget(type, name));
+          const isWinner =
+            winner === undefined ||
+            (winner.op === op && winner.order === op.order);
           // We don't emit anything on the server when value is `noChange`
-          if (committedValue !== noChange) {
+          if (committedValue !== noChange && isWinner) {
             const instance = op.useCustomElementInstance
               ? renderInfo.customElementInstanceStack.at(-1)
               : undefined;
@@ -905,11 +1209,32 @@ And the inner template was:
         break;
       }
       case 'element-part': {
-        // We don't emit anything for element parts (since we only support
-        // directives for now; since they can't render, we don't even bother
-        // running them), but we still need to advance the part index
         renderResult.push(() => {
           partIndex++;
+          const bindings = spreadBindingsByOp.get(op);
+          if (bindings === undefined) {
+            return;
+          }
+          const instance = op.useCustomElementInstance
+            ? renderInfo.customElementInstanceStack.at(-1)
+            : undefined;
+          const results: string[] = [];
+          for (const binding of bindings) {
+            const winner: AttributeWinner | undefined = attributeWinners
+              .get(op.index)
+              ?.get(binding.target);
+            if (
+              winner?.op === op &&
+              winner.order === op.order &&
+              winner.binding === binding
+            ) {
+              const rendered = renderSpreadBinding(instance, op, binding);
+              if (rendered !== undefined) {
+                results.push(rendered);
+              }
+            }
+          }
+          return results.join(' ');
         });
         break;
       }
@@ -918,19 +1243,36 @@ And the inner template was:
         // need to return a thunk function so that we mutate the renderInfo
         // state at the right time during the render.
         renderResult.push(() => {
+          const winners = attributeWinners.get(op.index);
+          const staticAttributes = new Map(
+            [...op.staticAttributes].filter(([name]) => {
+              const normalizedName = normalizeAttributeName(
+                op.namespaceURI,
+                name
+              );
+              const order = op.staticAttributeOrders.get(name)!;
+              const winner = winners?.get(
+                bindingTarget(PartType.ATTRIBUTE, normalizedName)
+              );
+              return (
+                winner === undefined ||
+                (winner.op === op && winner.order === order)
+              );
+            })
+          );
           // Instantiate the element and its renderer
           const instance = getElementRenderer(
             renderInfo,
             op.tagName,
             op.ctor,
-            op.staticAttributes
+            staticAttributes
           );
           if (instance.element) {
             addElementToEventPath(instance.element, renderInfo);
             renderInfo.eventTargetStack.push(instance.element);
           }
           // Set static attributes to the element renderer
-          for (const [name, value] of op.staticAttributes) {
+          for (const [name, value] of staticAttributes) {
             instance.setAttribute(name, value);
           }
           renderInfo.customElementInstanceStack.push(instance);
@@ -1095,6 +1437,41 @@ function throwErrorForPartIndexMismatch(
   `;
 
   throw new Error(errorMsg);
+}
+
+function renderSpreadBinding(
+  instance: ElementRenderer | undefined,
+  op: ElementPartOp,
+  binding: SSRSpreadBinding
+): string | undefined {
+  const attributeOp: AttributePartOp = {
+    type: 'attribute-part',
+    index: op.index,
+    order: op.order,
+    name: binding.name,
+    ctor:
+      binding.type === PartType.PROPERTY
+        ? PropertyPart
+        : binding.type === PartType.BOOLEAN_ATTRIBUTE
+          ? BooleanAttributePart
+          : binding.type === PartType.EVENT
+            ? EventPart
+            : AttributePart,
+    strings: ['', ''],
+    tagName: op.tagName,
+    namespaceURI: op.namespaceURI,
+    useCustomElementInstance: op.useCustomElementInstance,
+  };
+  if (binding.type === PartType.PROPERTY) {
+    return renderPropertyPart(instance, attributeOp, binding.value);
+  }
+  if (binding.type === PartType.BOOLEAN_ATTRIBUTE) {
+    return renderBooleanAttributePart(instance, attributeOp, binding.value);
+  }
+  if (binding.type === PartType.ATTRIBUTE) {
+    return renderAttributePart(instance, attributeOp, binding.value);
+  }
+  return undefined;
 }
 
 function renderPropertyPart(
